@@ -11,7 +11,7 @@ function App() {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch('http://localhost:5000/convert', {
+    const response = await fetch('https://csvtoedibe.onrender.com/convert', {
       method: 'POST',
       body: formData,
     });
