@@ -1,40 +1,35 @@
-import React, { useState } from 'react';
+const express = require('express');
+const multer = require('multer');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const app = express();
+const port = 5000;
 
-function App() {
-  const [file, setFile] = useState(null);
+app.use(cors());
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-  };
+const upload = multer({ dest: 'uploads/' });
 
-  const handleUpload = async () => {
-    const formData = new FormData();
-    formData.append('file', file);
+app.post('/convert', upload.single('file'), (req, res) => {
+    const format = req.body.format || '214'; // Default to 214 if not provided
+    const csv = fs.readFileSync(req.file.path, 'utf8');
+    const lines = csv.trim().split('\n');
+    const headers = lines[0].split(',');
 
-    const response = await fetch('https://csvtoedibe.onrender.com/convert', {
-      method: 'POST',
-      body: formData,
+    const ediSegments = lines.slice(1).map((line, index) => {
+        const values = line.split(',');
+        const segment = headers.map((h, i) => `${h.trim()}:${values[i]?.trim() || ''}`).join('|');
+        return `EDI${format}-${index + 1}|${segment}`;
     });
 
-    const blob = await response.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = 'output.edi';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
+    const ediContent = ediSegments.join('\n');
+    const ediPath = path.join(__dirname, 'uploads', `output_${format}.edi`);
+    fs.writeFileSync(ediPath, ediContent);
 
-  return (
-    <div style={{ padding: 20 }}>
-      <h2>CSV to EDI Converter</h2>
-      <input type="file" accept=".csv" onChange={handleFileChange} />
-      <button onClick={handleUpload} disabled={!file}>
-        Convert & Download EDI
-      </button>
-    </div>
-  );
-}
+    res.download(ediPath, `output_${format}.edi`, () => {
+        fs.unlinkSync(req.file.path);
+        fs.unlinkSync(ediPath);
+    });
+});
 
-export default App;
+app.listen(port, () => console.log(`Server running on http://localhost:${port}`));
