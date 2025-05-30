@@ -1,35 +1,60 @@
-const express = require('express');
-const multer = require('multer');
-const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
-const app = express();
-const port = 5000;
+import React, { useState } from 'react';
 
-app.use(cors());
+function App() {
+  const [file, setFile] = useState(null);
+  const [ediFormat, setEdiFormat] = useState('204');
 
-const upload = multer({ dest: 'uploads/' });
+  const handleFileChange = (e) => {
+    setFile(e.target.files[0]);
+  };
 
-app.post('/convert', upload.single('file'), (req, res) => {
-    const format = req.body.format || '214'; // Default to 214 if not provided
-    const csv = fs.readFileSync(req.file.path, 'utf8');
-    const lines = csv.trim().split('\n');
-    const headers = lines[0].split(',');
+  const handleFormatChange = (e) => {
+    setEdiFormat(e.target.value);
+  };
 
-    const ediSegments = lines.slice(1).map((line, index) => {
-        const values = line.split(',');
-        const segment = headers.map((h, i) => `${h.trim()}:${values[i]?.trim() || ''}`).join('|');
-        return `EDI${format}-${index + 1}|${segment}`;
+  const handleUpload = async () => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('format', ediFormat); // Include selected EDI format
+
+    const response = await fetch('https://csvtoedibe.onrender.com/convert', {
+      method: 'POST',
+      body: formData,
     });
 
-    const ediContent = ediSegments.join('\n');
-    const ediPath = path.join(__dirname, 'uploads', `output_${format}.edi`);
-    fs.writeFileSync(ediPath, ediContent);
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `output_${ediFormat}.edi`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
-    res.download(ediPath, `output_${format}.edi`, () => {
-        fs.unlinkSync(req.file.path);
-        fs.unlinkSync(ediPath);
-    });
-});
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>CSV to EDI Converter</h2>
+      
+      <input type="file" accept=".csv" onChange={handleFileChange} />
+      <br /><br />
+      
+      <label>
+        Select EDI Format:
+        <select value={ediFormat} onChange={handleFormatChange} style={{ marginLeft: 10 }}>
+          <option value="204">EDI 204</option>
+          <option value="210">EDI 210</option>
+          <option value="214">EDI 214</option>
+          <option value="990">EDI 990</option>
+        </select>
+      </label>
+      <br /><br />
+      
+      <button onClick={handleUpload} disabled={!file}>
+        Convert & Download EDI
+      </button>
+    </div>
+  );
+}
 
-app.listen(port, () => console.log(`Server running on http://localhost:${port}`));
+export default App;
